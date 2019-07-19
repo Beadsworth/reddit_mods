@@ -105,7 +105,7 @@ class Reddit:
         print(subreddit_name)
 
         try:
-            sub_id = self.reddit_client.subreddit(subreddit_name).id
+            sub_id = 't5_' + str(self.reddit_client.subreddit(subreddit_name).id)
 
         except (prawcore.exceptions.Forbidden, prawcore.exceptions.NotFound) as e:
             print('could not find id for /r/'+subreddit_name)
@@ -147,19 +147,38 @@ class Reddit:
 
         query_str = \
             """
-            SELECT 
+            SELECT DISTINCT
                  s.scan_id
                 ,m.moderator_name
-                ,m.id AS top_mods_id
             FROM reddit_mods_dev.top_mods AS m
             JOIN reddit_mods_dev.top_subreddits AS s
                 ON s.id = m.top_subreddits_id
             WHERE s.scan_id = {scan_id}
-            ORDER BY s.scan_id, m.id
+            ORDER BY s.scan_id, m.moderator_name
             """.format(scan_id=scan_id)
 
         result = self.sql_client.pull(query_str=query_str)
         return result
+
+    def get_exhaustive_subs_from_scan_id(self, scan_id):
+
+        query_str = \
+            """
+            SELECT DISTINCT
+                 u.scan_id
+                ,u.subreddit_display_name
+                ,s.subreddit_id
+            FROM user_modded_subs AS u
+            JOIN subreddit_names AS s
+            ON s.subreddit_display_name = u.subreddit_display_name
+            WHERE scan_id = {scan_id}
+            ORDER BY u.scan_id, s.subreddit_id
+            """.format(scan_id=scan_id)
+
+        result = self.sql_client.pull(query_str=query_str)
+        return result
+
+
 
     def get_missing_sub_ids_from_scan(self, scan_id):
 
@@ -168,16 +187,11 @@ class Reddit:
             SELECT DISTINCT
                 u.subreddit_display_name
             FROM user_modded_subs AS u
-            JOIN top_mods AS m
-                ON m.id = u.top_mods_id
-            JOIN top_subreddits AS s
-                ON s.id = m.top_subreddits_id
             LEFT JOIN subreddit_names AS n
                 ON n.subreddit_display_name = u.subreddit_display_name
-            WHERE s.scan_id = {scan_id}
+            WHERE u.scan_id = {scan_id}
                 AND n.subreddit_id IS NULL
             ORDER BY u.subreddit_display_name
-            LIMIT 5000
             """.format(scan_id=scan_id)
 
         result = self.sql_client.pull(query_str=query_str)
@@ -320,7 +334,7 @@ class Reddit:
         # TODO check out subreddit.traffic()
 
         target_keys = [
-            'id',
+            'name',
             'display_name',
             'url',
             'over18',
@@ -334,10 +348,11 @@ class Reddit:
         subs_info = [{key: getattr(sub, key) for key in target_keys} for sub in subs]
 
         df = pd.DataFrame(subs_info)
-        # fix ids
-        df['id'] = df['id'].apply(lambda x: 't5_' + x)
 
-        return df.set_index('id').sort_values('display_name')
+        # fix ids
+        # df['id'] = df['id'].apply(lambda x: 't5_' + x)
+
+        return df.rename(columns={'name': 'subreddit_id'}).sort_values('display_name').set_index('subreddit_id', drop=True)
 
 
 if __name__ == '__main__':
@@ -352,6 +367,8 @@ if __name__ == '__main__':
         print("iteration:", i)
 
         reddit = Reddit()
+
+        temp = reddit.get_subreddits_info(['t5_2qh1i'])
 
         # print(reddit.get_sub_id_from_name('AskReddit'))
         # print(reddit.get_sub_id_from_name('ChristmasStory'))
@@ -390,17 +407,28 @@ if __name__ == '__main__':
         # print(top_mods)
 
         top_mod_from_db = reddit.get_top_mods_from_scan_id(scan_id)
+        mod_count = len(top_mod_from_db)
 
         for index, row in top_mod_from_db.iterrows():
-            print(index)
+            print("fetching subs for moderator {current} of {total}".format(current=index+1, total=mod_count))
             mod_list_df = reddit.get_user_mod_list(row['moderator_name'])
             mod_list_df['log_date'] = dt.datetime.now()
-            mod_list_df['top_mods_id'] = row['top_mods_id']
+            mod_list_df['scan_id'] = row['scan_id']
             reddit.sql_client.push('user_modded_subs', mod_list_df)
 
         # if subreddit_id is missing from db, get it
         reddit.store_missing_sub_ids_for_scan(scan_id=scan_id)
 
+        exhaustive_subs = reddit.get_exhaustive_subs_from_scan_id(scan_id=scan_id)
+        exhaustive_subs_info = reddit.get_subreddits_info(exhaustive_subs['subreddit_id'].tolist())
+        exhaustive_subs_info['scan_id'] = scan_id
+        exhaustive_subs_info['log_date'] = dt.datetime.now()
+        # exhaustive_subs_info['scan_id'] = scan_id
+        # exhaustive_subs_info.sort_values('id', inplace=True)
+        # exhaustive_subs_info.set_index('id', inplace=True)
+        # exhaustive_subs_info.reset_index(drop=True, inplace=True)
+        # exhaustive_subs_info.index.rename('subreddit_id', inplace=True)
+        reddit.sql_client.push(table_name='subreddit_details', df=exhaustive_subs_info)
         # sleep
         for j in range(pause_time):
 
