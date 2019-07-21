@@ -251,7 +251,7 @@ class Reddit:
         # fix ids
         df['subreddit_id'] = df['subreddit_id'].apply(lambda x: 't5_' + x)
 
-        return df.sort_values(['subreddit_id', 'moderator_name']).reset_index(drop=True)
+        return df[df['moderator_id'].notnull()].sort_values(['subreddit_id', 'moderator_name']).reset_index(drop=True)
 
     def get_user_mod_list(self, user):
 
@@ -260,43 +260,60 @@ class Reddit:
         :return: df with subreddits moderated by user
         """
 
+        time.sleep(2)
+
+        # request user page
         user_page = 'http://ps.reddit.com/user/' + user
         # bypass nsfw age confirmation
         cookies = {'over18': '1'}
-
-        modded_subreddits = []
-
-        # request user page
-        time.sleep(2)
         response = requests.get(user_page, headers=get_user_agent_headers(), cookies=cookies)
-
-        if response.status_code != 200:
-            raise RuntimeError("request failed: {}".format(response.status_code))
-
-        # parse html
-        content = response.content
-        parsed_html = BeautifulSoup(content, features='lxml')
-
         modded_subreddits = []
-        for y in parsed_html.find('ul', id='side-mod-list').contents:
-            subreddit_name = y.contents[0]['href'].split('/r/')[-1].split('/')[0]
-            page_type, subreddit_name = self.url_pattern.findall(y.contents[0]['href'])[0]
 
-            # if it's a subreddit
-            if page_type == 'r':
+        # TODO react to suspended accounts
+        if response.status_code == 200:
 
-                # subreddit_id = self.get_sub_id_from_name(subreddit_name)
+            # parse html
+            content = response.content
+            parsed_html = BeautifulSoup(content, features='lxml')
+            found = parsed_html.find('ul', id='side-mod-list')
+
+            if found:
+                # add subreddits to modded_subreddits list
+                for y in found.contents:
+                    subreddit_name = y.contents[0]['href'].split('/r/')[-1].split('/')[0]
+                    page_type, subreddit_name = self.url_pattern.findall(y.contents[0]['href'])[0]
+
+                    # if it's a subreddit
+                    if page_type == 'r':
+                        # subreddit_id = self.get_sub_id_from_name(subreddit_name)
+                        mod_dist = {
+                            'user': user,
+                            'subreddit_display_name': subreddit_name
+                        }
+
+                        modded_subreddits.append(mod_dist)
+            else:
+                print('couldn\'t find subreddits on user\'s page: {user}'.format(user=user))
                 mod_dist = {
                     'user': user,
-                    'subreddit_display_name': subreddit_name
+                    'subreddit_display_name': None
                 }
 
                 modded_subreddits.append(mod_dist)
 
+        # suspended account
+        elif response.status_code in (403, 404):
+            print('error code {error}: cannot access account for {user}'.format(error=response.status_code, user=user))
+            mod_dist = {
+                'user': user,
+                'subreddit_display_name': None
+            }
+
+            modded_subreddits.append(mod_dist)
+        else:
+            raise RuntimeError("request failed: {}".format(response.status_code))
+
         df = pd.DataFrame(modded_subreddits)
-        # fix ids
-        # df['subreddit_id'] = df['subreddit_id'].apply(lambda x: 't5_' + x)
-        # return modded_subreddits
         return df.sort_values(['user', 'subreddit_display_name']).reset_index(drop=True)
 
     def get_users_mod_list(self, users):
@@ -385,8 +402,7 @@ if __name__ == '__main__':
         #
         # print(dt.datetime.now() - start_time)
 
-
-        top_subs = reddit.get_top_subreddits(10)
+        top_subs = reddit.get_top_subreddits(1000)
         # add scan_id
         top_subs['scan_id'] = scan_id
         # add log date
@@ -412,9 +428,13 @@ if __name__ == '__main__':
         for index, row in top_mod_from_db.iterrows():
             print("fetching subs for moderator {current} of {total}".format(current=index+1, total=mod_count))
             mod_list_df = reddit.get_user_mod_list(row['moderator_name'])
-            mod_list_df['log_date'] = dt.datetime.now()
-            mod_list_df['scan_id'] = row['scan_id']
-            reddit.sql_client.push('user_modded_subs', mod_list_df)
+
+            # push mod list has at least one subreddit
+            if len(mod_list_df[mod_list_df['subreddit_display_name'].notnull()]) > 0:
+                # TODO consider moving to inside get_user_mod_list()
+                mod_list_df['log_date'] = dt.datetime.now()
+                mod_list_df['scan_id'] = row['scan_id']
+                reddit.sql_client.push('user_modded_subs', mod_list_df)
 
         # if subreddit_id is missing from db, get it
         reddit.store_missing_sub_ids_for_scan(scan_id=scan_id)
