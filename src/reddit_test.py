@@ -80,7 +80,8 @@ class Reddit:
         try:
             sub_id = 't5_' + str(self.reddit_client.subreddit(subreddit_name).id)
 
-        except (prawcore.exceptions.Forbidden, prawcore.exceptions.NotFound) as e:
+        # TODO find id if forbidden
+        except (prawcore.exceptions.Forbidden, prawcore.exceptions.NotFound, prawcore.exceptions.Redirect) as e:
             print('could not find id for /r/'+subreddit_name)
             sub_id = None
 
@@ -267,6 +268,7 @@ class Reddit:
                 self.db_conn.push('user_modded_subs', reddit_user_modded_subs)
 
     def store_missing_sub_ids_for_scan(self, scan_id):
+        # TODO create ignore list in db
 
         subreddit_names = self.db_conn.get_missing_sub_ids_from_scan(scan_id=scan_id)
         subreddit_names['subreddit_id'] = subreddit_names['subreddit_display_name']\
@@ -288,6 +290,12 @@ class Reddit:
         # push
         self.db_conn.push(table_name='subreddit_details', df=reddit_exhaustive_subs_info)
 
+    def complete_scan(self, scan_id):
+
+        completion_time = dt.datetime.now()
+        completion_df = pd.DataFrame([{'scan_id': scan_id, 'scan_end_date': completion_time}])
+        self.db_conn.push('completions', completion_df)
+
     def perform_one_scan(self, sub_count=1):
 
         # checkout a scan_id
@@ -308,6 +316,9 @@ class Reddit:
         # for each subreddit modded by a top-mod, get subreddit info
         self.store_exhaustive_subs_info(scan_id=current_scan_id)
 
+        # save scan completion in db
+        self.complete_scan(scan_id=current_scan_id)
+
 
 if __name__ == '__main__':
 
@@ -317,7 +328,7 @@ if __name__ == '__main__':
     # pause_time = 24 * one_hour
 
     reddit = Reddit()
-    reddit.perform_one_scan(sub_count=100)
+    reddit.perform_one_scan(sub_count=1000)
 
     # loiter(pause_time)
 
