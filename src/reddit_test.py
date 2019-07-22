@@ -1,4 +1,5 @@
 import praw
+import prawcore
 import reddit_secret
 import requests
 import random
@@ -6,13 +7,25 @@ import pandas as pd
 import datetime as dt
 import re
 import time
-import src.mysql as sql
-import prawcore
+import src.db as db
+
 
 try:
     from BeautifulSoup import BeautifulSoup
 except ImportError:
     from bs4 import BeautifulSoup
+
+
+def loiter(pause_time):
+
+    for j in range(pause_time):
+
+        remaining_time = pause_time - j
+
+        print("next iteration in {seconds} seconds".format(seconds=remaining_time), end='')
+        time.sleep(1)
+        print("\r" + " " * 100, end='\r')
+
 
 def get_user_agent_headers():
     user_agent_list = [
@@ -42,51 +55,13 @@ def get_user_agent_headers():
         'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)',
         'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 2.0.50727; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)'
     ]
-    url = 'https://httpbin.org/user-agent'
-    #Lets make 5 requests and see what user agents are used
 
-    #Pick a random user agent
+    # Pick a random user agent
     user_agent = random.choice(user_agent_list)
-    #Set the headers
+    # Set the headers
     headers = {'User-Agent': user_agent}
 
     return headers
-
-
-# def get_users_mod_list(user):
-#     """
-#     user is username only, no leading 'u/'
-#     return list of subreddits, no leading 'r/'
-#     """
-#
-#     # css class for moderated subreddits -- found on a redditor's "user" page
-#     modded_subreddits_class = 'ylup29-4 dllHsI'
-#
-#     modded_subreddits = []
-#     user_page = 'http://www.reddit.com/user/' + user
-#
-#     try:
-#         # request user page
-#         response = requests.get(user_page, headers=get_user_agent_headers())
-#
-#         if response.status_code != 200:
-#             raise RuntimeError("request failed!")
-#
-#         # html_test_file_path = r'/home/jmb/PycharmProjects/reddit_mods/src/test_files/test_moderator_page.html'
-#
-#         # with open(html_test_file_path, 'r') as f:
-#         #     response = f.read()
-#
-#         # parse html
-#         content = response.content
-#         parsed_html = BeautifulSoup(content, features='lxml')
-#         modded_subreddits = [x.text.split('r/')[-1] for x in parsed_html.find_all("a", class_=modded_subreddits_class)]
-#
-#         if len(modded_subreddits)==0:
-#             print("oops")
-#
-#     finally:
-#         return modded_subreddits
 
 
 class Reddit:
@@ -98,11 +73,9 @@ class Reddit:
                                          client_id=reddit_secret.client_id,
                                          client_secret=reddit_secret.client_secret)
 
-        self.sql_client = sql.MysqlClient()
+        self.db_conn = db.DBConnection()
 
     def get_sub_id_from_name(self, subreddit_name):
-
-        print(subreddit_name)
 
         try:
             sub_id = 't5_' + str(self.reddit_client.subreddit(subreddit_name).id)
@@ -112,103 +85,6 @@ class Reddit:
             sub_id = None
 
         return sub_id
-
-    def get_last_scan_id(self):
-
-        query_str =\
-            """
-            SELECT id
-            FROM reddit_mods_dev.scans
-            ORDER BY id DESC
-            LIMIT 1
-            """
-
-        result = self.sql_client.pull(query_str=query_str)
-        last_id = int(result['id'].loc[0])
-
-        return last_id
-
-    def get_top_subs_from_scan_id(self, scan_id):
-
-        query_str = \
-            """
-            SELECT
-                 id AS top_subreddits_id
-                ,subreddit_id
-            FROM reddit_mods_dev.top_subreddits
-            WHERE scan_id = {scan_id}
-            ORDER BY id
-            """.format(scan_id=scan_id)
-
-        result = self.sql_client.pull(query_str=query_str)
-        return result
-
-    def get_top_mods_from_scan_id(self, scan_id):
-
-        query_str = \
-            """
-            SELECT DISTINCT
-                 s.scan_id
-                ,m.moderator_name
-            FROM reddit_mods_dev.top_mods AS m
-            JOIN reddit_mods_dev.top_subreddits AS s
-                ON s.id = m.top_subreddits_id
-            WHERE s.scan_id = {scan_id}
-            ORDER BY s.scan_id, m.moderator_name
-            """.format(scan_id=scan_id)
-
-        result = self.sql_client.pull(query_str=query_str)
-        return result
-
-    def get_exhaustive_subs_from_scan_id(self, scan_id):
-
-        query_str = \
-            """
-            SELECT DISTINCT
-                 u.scan_id
-                ,u.subreddit_display_name
-                ,s.subreddit_id
-            FROM user_modded_subs AS u
-            JOIN subreddit_names AS s
-            ON s.subreddit_display_name = u.subreddit_display_name
-            WHERE scan_id = {scan_id}
-            ORDER BY u.scan_id, s.subreddit_id
-            """.format(scan_id=scan_id)
-
-        result = self.sql_client.pull(query_str=query_str)
-        return result
-
-
-
-    def get_missing_sub_ids_from_scan(self, scan_id):
-
-        query_str = \
-            """
-            SELECT DISTINCT
-                u.subreddit_display_name
-            FROM user_modded_subs AS u
-            LEFT JOIN subreddit_names AS n
-                ON n.subreddit_display_name = u.subreddit_display_name
-            WHERE u.scan_id = {scan_id}
-                AND n.subreddit_id IS NULL
-            ORDER BY u.subreddit_display_name
-            """.format(scan_id=scan_id)
-
-        result = self.sql_client.pull(query_str=query_str)
-        return result
-
-    def store_missing_sub_ids_for_scan(self, scan_id):
-
-        subreddit_names = self.get_missing_sub_ids_from_scan(scan_id=scan_id)
-        subreddit_names['subreddit_id'] = subreddit_names['subreddit_display_name']\
-            .apply(lambda x: reddit.get_sub_id_from_name(x))
-        subreddit_names['log_date'] = dt.datetime.now()
-
-        # public subreddits with ids that are found
-        found_subreddit_names = subreddit_names[subreddit_names['subreddit_id'].notnull()]
-
-        # push
-        reddit.sql_client.push('subreddit_names', found_subreddit_names)
 
     def get_top_subreddits(self, count):
         """
@@ -302,7 +178,7 @@ class Reddit:
                 modded_subreddits.append(mod_dist)
 
         # suspended account
-        elif response.status_code in (403, 404):
+        else:
             print('error code {error}: cannot access account for {user}'.format(error=response.status_code, user=user))
             mod_dist = {
                 'user': user,
@@ -310,37 +186,9 @@ class Reddit:
             }
 
             modded_subreddits.append(mod_dist)
-        else:
-            raise RuntimeError("request failed: {}".format(response.status_code))
 
         df = pd.DataFrame(modded_subreddits)
         return df.sort_values(['user', 'subreddit_display_name']).reset_index(drop=True)
-
-    def get_users_mod_list(self, users):
-        """
-        :param users: list of users
-        :return: DataFrame of users and their moderated subs
-        """
-
-        all_mod_lists = []
-        for user in users:
-            mod_list = self.get_user_mod_list(user)
-            all_mod_lists.extend(mod_list)
-
-        return pd.DataFrame(all_mod_lists).set_index('user').sort_values(['user', 'subreddit_name'])
-
-    # def get_users_mod_list_with_ids(self, users):
-    #
-    #     users_mod_list = self.get_users_mod_list(users)
-    #
-    #     unique_subreddits = users_mod_list['subreddit_name'].unique().tolist()
-    #     sub_ids = pd.DataFrame(
-    #         [{'subreddit_name': subreddit_name, 'subreddit_id': self.get_sub_id_from_name(subreddit_name)}
-    #          for subreddit_name in unique_subreddits]
-    #     )
-    #
-    #
-    #     print(sub_ids)
 
     def get_subreddits_info(self, subreddit_ids):
         """
@@ -371,91 +219,106 @@ class Reddit:
 
         return df.rename(columns={'name': 'subreddit_id'}).sort_values('display_name').set_index('subreddit_id', drop=True)
 
+    def checkout_id(self):
+        scan_time = dt.datetime.now()
+        scan_df = pd.DataFrame([{'scan_start_date': scan_time}])
+        self.db_conn.push('scans', scan_df)
+
+        scan_id = self.db_conn.get_last_scan_id()
+        return scan_id
+
+    def store_top_subs(self, scan_id, sub_count):
+
+        reddit_top_subs = self.get_top_subreddits(sub_count)
+        # add scan_id
+        reddit_top_subs['scan_id'] = scan_id
+        # add log date
+        reddit_top_subs['log_date'] = dt.datetime.now()
+        # push
+        self.db_conn.push('top_subreddits', reddit_top_subs)
+        # print(top_subs)
+
+    def store_top_mods(self, scan_id):
+        db_top_subs = self.db_conn.get_top_subs_from_scan_id(scan_id=scan_id)
+
+        top_sub_ids_list = db_top_subs['subreddit_id'].unique().tolist()
+        reddit_top_mods = self.get_subreddits_moderators(top_sub_ids_list)
+        # join top_subreddit_ids
+        reddit_top_mods = pd.merge(left=db_top_subs, right=reddit_top_mods, how='left', on='subreddit_id')
+        # add log date
+        reddit_top_mods['log_date'] = dt.datetime.now()
+        # push
+        self.db_conn.push('top_mods', reddit_top_mods)
+
+    def store_user_modded_subs(self, scan_id):
+        db_top_mods = self.db_conn.get_top_mods_from_scan_id(scan_id)
+
+        mod_count = len(db_top_mods)
+
+        for index, row in db_top_mods.iterrows():
+            print("fetching subs for moderator {current} of {total}".format(current=index + 1, total=mod_count))
+            reddit_user_modded_subs = self.get_user_mod_list(row['moderator_name'])
+
+            # push mod list has at least one subreddit
+            if len(reddit_user_modded_subs[reddit_user_modded_subs['subreddit_display_name'].notnull()]) > 0:
+                # TODO consider moving to inside get_user_mod_list()
+                reddit_user_modded_subs['log_date'] = dt.datetime.now()
+                reddit_user_modded_subs['scan_id'] = row['scan_id']
+                self.db_conn.push('user_modded_subs', reddit_user_modded_subs)
+
+    def store_missing_sub_ids_for_scan(self, scan_id):
+
+        subreddit_names = self.db_conn.get_missing_sub_ids_from_scan(scan_id=scan_id)
+        subreddit_names['subreddit_id'] = subreddit_names['subreddit_display_name']\
+            .apply(lambda x: self.get_sub_id_from_name(x))
+        subreddit_names['log_date'] = dt.datetime.now()
+
+        # public subreddits with ids that are found
+        found_subreddit_names = subreddit_names[subreddit_names['subreddit_id'].notnull()]
+
+        # push
+        self.db_conn.push('subreddit_names', found_subreddit_names)
+
+    def store_exhaustive_subs_info(self, scan_id):
+        db_exhaustive_subs = self.db_conn.get_exhaustive_subs_from_scan_id(scan_id=scan_id)
+
+        reddit_exhaustive_subs_info = self.get_subreddits_info(db_exhaustive_subs['subreddit_id'].tolist())
+        reddit_exhaustive_subs_info['scan_id'] = scan_id
+        reddit_exhaustive_subs_info['log_date'] = dt.datetime.now()
+        # push
+        self.db_conn.push(table_name='subreddit_details', df=reddit_exhaustive_subs_info)
+
+    def perform_one_scan(self, sub_count=1):
+
+        # checkout a scan_id
+        current_scan_id = self.checkout_id()
+
+        # get the most popular subreddits
+        self.store_top_subs(scan_id=current_scan_id, sub_count=sub_count)
+
+        # for each top subreddit, get all mods
+        self.store_top_mods(scan_id=current_scan_id)
+
+        # for each top mod, get all other subreddits moderated by that mod
+        self.store_user_modded_subs(scan_id=current_scan_id)
+
+        # if subreddit_id is missing from db, get it
+        self.store_missing_sub_ids_for_scan(scan_id=current_scan_id)
+
+        # for each subreddit modded by a top-mod, get subreddit info
+        self.store_exhaustive_subs_info(scan_id=current_scan_id)
+
 
 if __name__ == '__main__':
 
     print("starting script @{} ...".format(dt.datetime.now()))
 
-    one_hour = 3600
-    pause_time = 24 * one_hour
+    # one_hour = 3600
+    # pause_time = 24 * one_hour
 
-    for i in range(100):
+    reddit = Reddit()
+    reddit.perform_one_scan(sub_count=100)
 
-        print("iteration:", i)
-
-        reddit = Reddit()
-
-        temp = reddit.get_subreddits_info(['t5_2qh1i'])
-
-        # print(reddit.get_sub_id_from_name('AskReddit'))
-        # print(reddit.get_sub_id_from_name('ChristmasStory'))
-
-        scan_time = dt.datetime.now()
-        scan_df = pd.DataFrame([{'scan_start_date': scan_time}])
-        reddit.sql_client.push('scans', scan_df)
-
-        scan_id = reddit.get_last_scan_id()
-
-        # # if subreddit_id is missing from db, get it
-        # start_time = dt.datetime.now()
-        # reddit.store_missing_sub_ids_for_scan(scan_id=125)
-        #
-        # print(dt.datetime.now() - start_time)
-
-        top_subs = reddit.get_top_subreddits(1000)
-        # add scan_id
-        top_subs['scan_id'] = scan_id
-        # add log date
-        top_subs['log_date'] = dt.datetime.now()
-        # push
-        reddit.sql_client.push('top_subreddits', top_subs)
-        # print(top_subs)
-
-        top_sub_ids = reddit.get_top_subs_from_scan_id(scan_id=scan_id)
-        top_sub_ids_list = top_sub_ids['subreddit_id'].unique().tolist()
-        top_mods = reddit.get_subreddits_moderators(top_sub_ids_list)
-        # join top_subreddit_ids
-        top_mods = pd.merge(left=top_sub_ids, right=top_mods, how='left', on='subreddit_id')
-        # add log date
-        top_mods['log_date'] = dt.datetime.now()
-        # push
-        reddit.sql_client.push('top_mods', top_mods)
-        # print(top_mods)
-
-        top_mod_from_db = reddit.get_top_mods_from_scan_id(scan_id)
-        mod_count = len(top_mod_from_db)
-
-        for index, row in top_mod_from_db.iterrows():
-            print("fetching subs for moderator {current} of {total}".format(current=index+1, total=mod_count))
-            mod_list_df = reddit.get_user_mod_list(row['moderator_name'])
-
-            # push mod list has at least one subreddit
-            if len(mod_list_df[mod_list_df['subreddit_display_name'].notnull()]) > 0:
-                # TODO consider moving to inside get_user_mod_list()
-                mod_list_df['log_date'] = dt.datetime.now()
-                mod_list_df['scan_id'] = row['scan_id']
-                reddit.sql_client.push('user_modded_subs', mod_list_df)
-
-        # if subreddit_id is missing from db, get it
-        reddit.store_missing_sub_ids_for_scan(scan_id=scan_id)
-
-        exhaustive_subs = reddit.get_exhaustive_subs_from_scan_id(scan_id=scan_id)
-        exhaustive_subs_info = reddit.get_subreddits_info(exhaustive_subs['subreddit_id'].tolist())
-        exhaustive_subs_info['scan_id'] = scan_id
-        exhaustive_subs_info['log_date'] = dt.datetime.now()
-        # exhaustive_subs_info['scan_id'] = scan_id
-        # exhaustive_subs_info.sort_values('id', inplace=True)
-        # exhaustive_subs_info.set_index('id', inplace=True)
-        # exhaustive_subs_info.reset_index(drop=True, inplace=True)
-        # exhaustive_subs_info.index.rename('subreddit_id', inplace=True)
-        reddit.sql_client.push(table_name='subreddit_details', df=exhaustive_subs_info)
-        # sleep
-        for j in range(pause_time):
-
-            remaining_time = pause_time - j
-
-            print("next iteration in {seconds} seconds".format(seconds=remaining_time), end='')
-            time.sleep(1)
-            print("\r" + " " * 100, end='\r')
+    # loiter(pause_time)
 
     print("done @{}!".format(dt.datetime.now()))
