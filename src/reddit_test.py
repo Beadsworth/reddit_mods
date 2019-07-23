@@ -287,6 +287,8 @@ class Reddit:
         reddit_exhaustive_subs_info = self.get_subreddits_info(db_exhaustive_subs['subreddit_id'].tolist())
         reddit_exhaustive_subs_info['scan_id'] = scan_id
         reddit_exhaustive_subs_info['log_date'] = dt.datetime.now()
+        reddit_exhaustive_subs_info.reset_index(drop=False, inplace=True)
+
         # push
         self.db_conn.push(table_name='subreddit_details', df=reddit_exhaustive_subs_info)
 

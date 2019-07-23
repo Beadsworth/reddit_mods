@@ -62,7 +62,7 @@ class DBConnection:
                 ,s.subreddit_id
             FROM user_modded_subs AS u
             JOIN subreddit_names AS s
-            ON s.subreddit_display_name = u.subreddit_display_name
+                ON s.subreddit_display_name = u.subreddit_display_name
             WHERE scan_id = {scan_id}
             ORDER BY u.scan_id, s.subreddit_id
             """.format(scan_id=scan_id)
