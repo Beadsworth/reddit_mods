@@ -8,6 +8,7 @@ import datetime as dt
 import re
 import time
 import src.db as db
+import tqdm
 
 
 try:
@@ -256,8 +257,8 @@ class Reddit:
 
         mod_count = len(db_top_mods)
 
-        for index, row in db_top_mods.iterrows():
-            print("fetching subs for moderator {current} of {total}".format(current=index + 1, total=mod_count))
+        for index, row in tqdm.tqdm(db_top_mods.iterrows(), total=mod_count):
+            # print("fetching subs for moderator {current} of {total}".format(current=index + 1, total=mod_count))
             reddit_user_modded_subs = self.get_user_mod_list(row['moderator_name'])
 
             # push mod list has at least one subreddit
@@ -325,9 +326,6 @@ class Reddit:
 if __name__ == '__main__':
 
     print("starting script @{} ...".format(dt.datetime.now()))
-
-    # one_hour = 3600
-    # pause_time = 24 * one_hour
 
     reddit = Reddit()
     reddit.perform_one_scan(sub_count=1000)
