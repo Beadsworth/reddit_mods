@@ -41,11 +41,14 @@ class DBConnection:
         query_str = \
             """
             SELECT DISTINCT
-                 s.scan_id
-                ,m.moderator_name
-            FROM reddit_mods_dev.top_mods AS m
-            WHERE m.scan_id = {scan_id}
-            ORDER BY m.scan_id, m.moderator_name
+                 t.scan_id
+                ,m.id AS mod_id
+                ,t.moderator_name
+            FROM reddit_mods_dev.top_mods AS t
+            JOIN reddit_mods_dev.moderators AS m
+                ON m.moderator_id = t.moderator_id
+            WHERE t.scan_id = {scan_id}
+            ORDER BY t.scan_id, t.moderator_name
             """.format(scan_id=scan_id)
 
         result = self.sql_client.pull(query_str=query_str)
@@ -59,7 +62,7 @@ class DBConnection:
                 ,u.subreddit_display_name
                 ,s.subreddit_id
             FROM user_modded_subs AS u
-            JOIN subreddit_names AS s
+            JOIN subreddits AS s
                 ON s.subreddit_display_name = u.subreddit_display_name
             WHERE u.scan_id = {scan_id}
             ORDER BY u.scan_id, s.subreddit_id
@@ -74,11 +77,28 @@ class DBConnection:
             SELECT DISTINCT
                 u.subreddit_display_name
             FROM user_modded_subs AS u
-            LEFT JOIN subreddit_names AS n
+            LEFT JOIN subreddits AS n
                 ON n.subreddit_display_name = u.subreddit_display_name
             WHERE u.scan_id = {scan_id}
                 AND n.subreddit_id IS NULL
             ORDER BY u.subreddit_display_name
+            """.format(scan_id=scan_id)
+
+        result = self.sql_client.pull(query_str=query_str)
+        return result
+
+    def get_missing_mod_ids_from_scan(self, scan_id):
+        query_str = \
+            """
+            SELECT DISTINCT
+                 t.moderator_id
+                ,t.moderator_name
+            FROM top_mods AS t
+            LEFT JOIN moderators AS m
+                ON m.moderator_id = t.moderator_id
+            WHERE t.scan_id = {scan_id}
+                AND m.moderator_id IS NULL
+            ORDER BY t.moderator_id, t.moderator_name
             """.format(scan_id=scan_id)
 
         result = self.sql_client.pull(query_str=query_str)

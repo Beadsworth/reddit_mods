@@ -245,12 +245,16 @@ class Reddit:
 
         top_sub_ids_list = db_top_subs['subreddit_id'].unique().tolist()
         reddit_top_mods = self.get_subreddits_moderators(top_sub_ids_list)
+
         # join top_subreddit_ids
-        reddit_top_mods = pd.merge(left=db_top_subs, right=reddit_top_mods, how='left', on='subreddit_id')
-        # add log date
+        # reddit_top_mods = pd.merge(left=db_top_subs, right=reddit_top_mods, how='left', on='subreddit_id')
+
+        # add log date & scan_id
         reddit_top_mods['log_date'] = dt.datetime.now()
+        reddit_top_mods['scan_id'] = scan_id
         # push
-        self.db_conn.push('top_mods', reddit_top_mods)
+        self.db_conn.push('top_mods', reddit_top_mods[['moderator_name', 'moderator_id', 'subreddit_id', 'log_date',
+                                                      'scan_id']])
 
     def store_user_modded_subs(self, scan_id):
         db_top_mods = self.db_conn.get_top_mods_from_scan_id(scan_id)
@@ -265,8 +269,19 @@ class Reddit:
             if len(reddit_user_modded_subs[reddit_user_modded_subs['subreddit_display_name'].notnull()]) > 0:
                 # TODO consider moving to inside get_user_mod_list()
                 reddit_user_modded_subs['log_date'] = dt.datetime.now()
+                reddit_user_modded_subs['mod_id'] = row['mod_id']
                 reddit_user_modded_subs['scan_id'] = row['scan_id']
-                self.db_conn.push('user_modded_subs', reddit_user_modded_subs)
+                self.db_conn.push('user_modded_subs', reddit_user_modded_subs[['scan_id', 'mod_id',
+                                                                              'subreddit_display_name', 'log_date']])
+
+    def store_missing_mod_ids_for_scan(self, scan_id):
+        # TODO create ignore list in db
+
+        new_mods = self.db_conn.get_missing_mod_ids_from_scan(scan_id=scan_id)
+        new_mods['log_date'] = dt.datetime.now()
+
+        # push
+        self.db_conn.push('moderators', new_mods[['moderator_id', 'moderator_name', 'log_date']])
 
     def store_missing_sub_ids_for_scan(self, scan_id):
         # TODO create ignore list in db
@@ -280,7 +295,7 @@ class Reddit:
         found_subreddit_names = subreddit_names[subreddit_names['subreddit_id'].notnull()]
 
         # push
-        self.db_conn.push('subreddit_names', found_subreddit_names)
+        self.db_conn.push('subreddits', found_subreddit_names[['subreddit_id', 'subreddit_display_name', 'log_date']])
 
     def store_exhaustive_subs_info(self, scan_id):
         db_exhaustive_subs = self.db_conn.get_exhaustive_subs_from_scan_id(scan_id=scan_id)
@@ -310,6 +325,9 @@ class Reddit:
         # for each top subreddit, get all mods
         self.store_top_mods(scan_id=current_scan_id)
 
+        # TODO: if new top-mod is found, store him in the moderators table
+        self.store_missing_mod_ids_for_scan(scan_id=current_scan_id)
+
         # for each top mod, get all other subreddits moderated by that mod
         self.store_user_modded_subs(scan_id=current_scan_id)
 
@@ -328,7 +346,7 @@ if __name__ == '__main__':
     print("starting script @{} ...".format(dt.datetime.now()))
 
     reddit = Reddit()
-    reddit.perform_one_scan(sub_count=1000)
+    reddit.perform_one_scan(sub_count=10)
 
     # loiter(pause_time)
 
