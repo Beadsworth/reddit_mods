@@ -44,10 +44,8 @@ class DBConnection:
                  s.scan_id
                 ,m.moderator_name
             FROM reddit_mods_dev.top_mods AS m
-            JOIN reddit_mods_dev.top_subreddits AS s
-                ON s.id = m.top_subreddits_id
-            WHERE s.scan_id = {scan_id}
-            ORDER BY s.scan_id, m.moderator_name
+            WHERE m.scan_id = {scan_id}
+            ORDER BY m.scan_id, m.moderator_name
             """.format(scan_id=scan_id)
 
         result = self.sql_client.pull(query_str=query_str)
@@ -63,7 +61,7 @@ class DBConnection:
             FROM user_modded_subs AS u
             JOIN subreddit_names AS s
                 ON s.subreddit_display_name = u.subreddit_display_name
-            WHERE scan_id = {scan_id}
+            WHERE u.scan_id = {scan_id}
             ORDER BY u.scan_id, s.subreddit_id
             """.format(scan_id=scan_id)
 
