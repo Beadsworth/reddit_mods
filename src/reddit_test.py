@@ -121,9 +121,10 @@ class Reddit:
         :return: DataFrame mod list all requested subreddits
         """
 
+        sub_count = len(subreddit_ids)
         subs = self.reddit_client.info(subreddit_ids)
         mods = [{'subreddit_id': sub.id, 'moderator_name': mod.name, 'moderator_id': mod.id}
-                for sub in subs for mod in sub.moderator()]
+                for sub in tqdm.tqdm(subs, total=sub_count, unit='subreddit') for mod in sub.moderator()]
 
         df = pd.DataFrame(mods)
         # fix ids
@@ -227,7 +228,8 @@ class Reddit:
         # fix ids
         # df['id'] = df['id'].apply(lambda x: 't5_' + x)
 
-        return df.rename(columns={'name': 'subreddit_id'}).sort_values('display_name').set_index('subreddit_id', drop=True)
+        return df.rename(columns={'name': 'subreddit_id'}).sort_values('display_name').set_index('subreddit_id',
+                                                                                                 drop=True)
 
     def checkout_id(self):
         scan_time = dt.datetime.now()
@@ -269,7 +271,7 @@ class Reddit:
 
         mod_count = len(db_top_mods)
 
-        for index, row in tqdm.tqdm(db_top_mods.iterrows(), total=mod_count):
+        for index, row in tqdm.tqdm(db_top_mods.iterrows(), total=mod_count, unit='moderator'):
             # print("fetching subs for moderator {current} of {total}".format(current=index + 1, total=mod_count))
             reddit_user_modded_subs = self.get_user_mod_list(moderator_name=row['moderator_name'], mod_id=row['mod_id'],
                                                              scan_id=scan_id)
@@ -361,7 +363,7 @@ if __name__ == '__main__':
     print("starting script @{} ...".format(dt.datetime.now()))
 
     reddit = Reddit()
-    reddit.perform_one_scan(sub_count=10)
+    reddit.perform_one_scan(sub_count=2)
 
     # loiter(pause_time)
 
