@@ -7,7 +7,7 @@ import pandas as pd
 import datetime as dt
 import re
 import time
-import src.db as db
+import db
 import tqdm
 
 

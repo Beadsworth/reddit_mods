@@ -1,4 +1,4 @@
-import src.mysql as sql
+import mysql as sql
 
 
 class DBConnection:

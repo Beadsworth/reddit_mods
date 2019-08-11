@@ -1,4 +1,4 @@
-import src.reddit_mod_data as bot
+import reddit_mod_data as bot
 import datetime as dt
 
 if __name__ == '__main__':
@@ -7,7 +7,7 @@ if __name__ == '__main__':
     print("starting script @{} ...".format(start_time))
 
     # execute task
-    bot.RedditModData(db_type='dev').perform_one_scan(sub_count=1)
+    bot.RedditModData(db_type='dev').perform_one_scan(sub_count=1000)
 
     end_time = dt.datetime.now()
     print("starting script @{}!".format(start_time))
