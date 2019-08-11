@@ -65,7 +65,7 @@ def get_user_agent_headers():
     return headers
 
 
-class Reddit:
+class RedditModData:
 
     url_pattern = re.compile('/?(.+?)/(.+?)/?$')
 
@@ -356,15 +356,3 @@ class Reddit:
         # save scan completion in db
         print("finishing up...")
         self.complete_scan(scan_id=current_scan_id)
-
-
-if __name__ == '__main__':
-
-    print("starting script @{} ...".format(dt.datetime.now()))
-
-    reddit = Reddit()
-    reddit.perform_one_scan(sub_count=2)
-
-    # loiter(pause_time)
-
-    print("done @{}!".format(dt.datetime.now()))
