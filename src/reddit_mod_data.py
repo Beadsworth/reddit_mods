@@ -69,12 +69,12 @@ class RedditModData:
 
     url_pattern = re.compile('/?(.+?)/(.+?)/?$')
 
-    def __init__(self):
+    def __init__(self, db_type):
         self.reddit_client = praw.Reddit(user_agent=reddit_secret.user_agent,
                                          client_id=reddit_secret.client_id,
                                          client_secret=reddit_secret.client_secret)
 
-        self.db_conn = db.DBConnection()
+        self.db_conn = db.DBConnection(db_type)
 
     def get_sub_id_from_name(self, subreddit_name):
 

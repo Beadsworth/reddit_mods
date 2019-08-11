@@ -1,13 +1,14 @@
 import mysql_secret
-import sqlalchemy as db
+import sqlalchemy
 import pandas as pd
 
 
 class MysqlClient:
 
-    def __init__(self):
+    def __init__(self, db_type):
 
-        self.engine = db.create_engine(mysql_secret.conn_str)
+        conn_str = mysql_secret.get_conn_str(db_type)
+        self.engine = sqlalchemy.create_engine(conn_str)
 
     def pull(self, query_str):
 
@@ -25,6 +26,6 @@ class MysqlClient:
 
 
 if __name__ == '__main__':
-    sql = MysqlClient()
-    result = sql.pull('SELECT 1')
-    print(result)
+    sql = MysqlClient(db_type='dev')
+    test_result = sql.pull('SELECT 1')
+    print(test_result)

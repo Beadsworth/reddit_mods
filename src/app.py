@@ -6,8 +6,8 @@ if __name__ == '__main__':
     start_time = dt.datetime.now()
     print("starting script @{} ...".format(start_time))
 
-    reddit = bot.RedditModData()
-    reddit.perform_one_scan(sub_count=1)
+    # execute task
+    bot.RedditModData(db_type='dev').perform_one_scan(sub_count=1)
 
     end_time = dt.datetime.now()
     print("starting script @{}!".format(start_time))

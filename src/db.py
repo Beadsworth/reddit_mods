@@ -3,8 +3,8 @@ import src.mysql as sql
 
 class DBConnection:
 
-    def __init__(self):
-        self.sql_client = sql.MysqlClient()
+    def __init__(self, db_type):
+        self.sql_client = sql.MysqlClient(db_type)
 
     def push(self, *args, **kwargs):
         self.sql_client.push(*args, **kwargs)
