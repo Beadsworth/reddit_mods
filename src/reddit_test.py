@@ -131,17 +131,17 @@ class Reddit:
 
         return df[df['moderator_id'].notnull()].sort_values(['subreddit_id', 'moderator_name']).reset_index(drop=True)
 
-    def get_user_mod_list(self, user):
+    def get_user_mod_list(self, moderator_name, mod_id, scan_id):
 
         """
-        :param user: user to fetch
+        :param moderator_name: user to fetch
         :return: df with subreddits moderated by user
         """
 
         time.sleep(2)
 
         # request user page
-        user_page = 'http://ps.reddit.com/user/' + user
+        user_page = 'http://ps.reddit.com/user/' + moderator_name
         # bypass nsfw age confirmation
         cookies = {'over18': '1'}
         response = requests.get(user_page, headers=get_user_agent_headers(), cookies=cookies)
@@ -164,33 +164,41 @@ class Reddit:
                     # if it's a subreddit
                     if page_type == 'r':
                         # subreddit_id = self.get_sub_id_from_name(subreddit_name)
-                        mod_dist = {
-                            'user': user,
+                        mod_dict = {
+                            'scan_id': scan_id,
+                            'mod_id': mod_id,
                             'subreddit_display_name': subreddit_name
                         }
 
-                        modded_subreddits.append(mod_dist)
+                        modded_subreddits.append(mod_dict)
             else:
-                print('couldn\'t find subreddits on user\'s page: {user}'.format(user=user))
-                mod_dist = {
-                    'user': user,
+                # print('couldn\'t find subreddits on user\'s page: {user}'.format(user=user))
+                mod_dict = {
+                    'scan_id': scan_id,
+                    'mod_id': mod_id,
                     'subreddit_display_name': None
                 }
 
-                modded_subreddits.append(mod_dist)
+                modded_subreddits.append(mod_dict)
 
         # suspended account
         else:
-            print('error code {error}: cannot access account for {user}'.format(error=response.status_code, user=user))
-            mod_dist = {
-                'user': user,
+            # print('error code {error}: cannot access account for {user}'.format(error=response.status_code, user=moderator_name))
+            # log error in db
+            mod_errors = pd.DataFrame([{'scan_id': scan_id, 'mod_id': mod_id, 'error_code': response.status_code,
+                                       'log_date': dt.datetime.now()}])
+            self.db_conn.push('moderator_errors', mod_errors[['scan_id', 'mod_id', 'error_code', 'log_date']])
+
+            mod_dict = {
+                'scan_id': scan_id,
+                'mod_id': mod_id,
                 'subreddit_display_name': None
             }
 
-            modded_subreddits.append(mod_dist)
+            modded_subreddits.append(mod_dict)
 
         df = pd.DataFrame(modded_subreddits)
-        return df.sort_values(['user', 'subreddit_display_name']).reset_index(drop=True)
+        return df.sort_values(['scan_id', 'mod_id', 'subreddit_display_name']).reset_index(drop=True)
 
     def get_subreddits_info(self, subreddit_ids):
         """
@@ -263,14 +271,13 @@ class Reddit:
 
         for index, row in tqdm.tqdm(db_top_mods.iterrows(), total=mod_count):
             # print("fetching subs for moderator {current} of {total}".format(current=index + 1, total=mod_count))
-            reddit_user_modded_subs = self.get_user_mod_list(row['moderator_name'])
-
+            reddit_user_modded_subs = self.get_user_mod_list(moderator_name=row['moderator_name'], mod_id=row['mod_id'],
+                                                             scan_id=scan_id)
+            # TODO consider moving to inside get_user_mod_list()
             # push mod list has at least one subreddit
             if len(reddit_user_modded_subs[reddit_user_modded_subs['subreddit_display_name'].notnull()]) > 0:
-                # TODO consider moving to inside get_user_mod_list()
+
                 reddit_user_modded_subs['log_date'] = dt.datetime.now()
-                reddit_user_modded_subs['mod_id'] = row['mod_id']
-                reddit_user_modded_subs['scan_id'] = row['scan_id']
                 self.db_conn.push('user_modded_subs', reddit_user_modded_subs[['scan_id', 'mod_id',
                                                                               'subreddit_display_name', 'log_date']])
 
@@ -317,27 +324,35 @@ class Reddit:
     def perform_one_scan(self, sub_count=1):
 
         # checkout a scan_id
+        print("checking out a scan id...")
         current_scan_id = self.checkout_id()
 
         # get the most popular subreddits
+        print("recording most popular subreddits...")
         self.store_top_subs(scan_id=current_scan_id, sub_count=sub_count)
 
         # for each top subreddit, get all mods
+        print("recording top moderators...")
         self.store_top_mods(scan_id=current_scan_id)
 
-        # TODO: if new top-mod is found, store him in the moderators table
+        # if new top-mod is found, store him in the moderators table
+        print("storing new moderators...")
         self.store_missing_mod_ids_for_scan(scan_id=current_scan_id)
 
         # for each top mod, get all other subreddits moderated by that mod
+        print("storing each moderator's modded subs...")
         self.store_user_modded_subs(scan_id=current_scan_id)
 
         # if subreddit_id is missing from db, get it
+        print("storing new subreddit ids...")
         self.store_missing_sub_ids_for_scan(scan_id=current_scan_id)
 
         # for each subreddit modded by a top-mod, get subreddit info
+        print("storing all subreddit information...")
         self.store_exhaustive_subs_info(scan_id=current_scan_id)
 
         # save scan completion in db
+        print("finishing up...")
         self.complete_scan(scan_id=current_scan_id)
 
 
