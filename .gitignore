@@ -94,6 +94,7 @@ ENV/
 # secret client files
 reddit_secret.py
 mysql_secret.py
+ssh_secret.py
 *.json
 
 # bash scripts
