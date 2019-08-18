@@ -3,11 +3,13 @@ import datetime as dt
 
 if __name__ == '__main__':
 
+    mode = 'dev'
+
     start_time = dt.datetime.now()
     print("starting script @{} ...".format(start_time))
 
     # execute task
-    bot.RedditModData(db_type='dev').perform_one_scan(sub_count=1000)
+    bot.RedditModData(mode='dev', remote=False).perform_one_scan(sub_count=1000)
 
     end_time = dt.datetime.now()
     print("finishing script @{} ...".format(start_time))

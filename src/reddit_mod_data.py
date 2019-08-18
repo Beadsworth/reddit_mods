@@ -69,12 +69,12 @@ class RedditModData:
 
     url_pattern = re.compile('/?(.+?)/(.+?)/?$')
 
-    def __init__(self, db_type):
+    def __init__(self, mode, remote):
         self.reddit_client = praw.Reddit(user_agent=reddit_secret.user_agent,
                                          client_id=reddit_secret.client_id,
                                          client_secret=reddit_secret.client_secret)
 
-        self.db_conn = db.DBConnection(db_type)
+        self.db_conn = db.DBConnection.get_db_conn(mode=mode, remote=remote)
 
     def get_sub_id_from_name(self, subreddit_name):
 
@@ -325,34 +325,36 @@ class RedditModData:
 
     def perform_one_scan(self, sub_count=1):
 
-        # checkout a scan_id
-        print("checking out a scan id...")
-        current_scan_id = self.checkout_id()
+        # perform all actions within the context of a database connection and possible ssh tunnel
+        with self.db_conn as conn:
+            # checkout a scan_id
+            print("checking out a scan id...")
+            current_scan_id = self.checkout_id()
 
-        # get the most popular subreddits
-        print("recording most popular subreddits...")
-        self.store_top_subs(scan_id=current_scan_id, sub_count=sub_count)
+            # get the most popular subreddits
+            print("recording most popular subreddits...")
+            self.store_top_subs(scan_id=current_scan_id, sub_count=sub_count)
 
-        # for each top subreddit, get all mods
-        print("recording top moderators...")
-        self.store_top_mods(scan_id=current_scan_id)
+            # for each top subreddit, get all mods
+            print("recording top moderators...")
+            self.store_top_mods(scan_id=current_scan_id)
 
-        # if new top-mod is found, store him in the moderators table
-        print("storing new moderators...")
-        self.store_missing_mod_ids_for_scan(scan_id=current_scan_id)
+            # if new top-mod is found, store him in the moderators table
+            print("storing new moderators...")
+            self.store_missing_mod_ids_for_scan(scan_id=current_scan_id)
 
-        # for each top mod, get all other subreddits moderated by that mod
-        print("storing each moderator's modded subs...")
-        self.store_user_modded_subs(scan_id=current_scan_id)
+            # for each top mod, get all other subreddits moderated by that mod
+            print("storing each moderator's modded subs...")
+            self.store_user_modded_subs(scan_id=current_scan_id)
 
-        # if subreddit_id is missing from db, get it
-        print("storing new subreddit ids...")
-        self.store_missing_sub_ids_for_scan(scan_id=current_scan_id)
+            # if subreddit_id is missing from db, get it
+            print("storing new subreddit ids...")
+            self.store_missing_sub_ids_for_scan(scan_id=current_scan_id)
 
-        # for each subreddit modded by a top-mod, get subreddit info
-        print("storing all subreddit information...")
-        self.store_exhaustive_subs_info(scan_id=current_scan_id)
+            # for each subreddit modded by a top-mod, get subreddit info
+            print("storing all subreddit information...")
+            self.store_exhaustive_subs_info(scan_id=current_scan_id)
 
-        # save scan completion in db
-        print("finishing up...")
-        self.complete_scan(scan_id=current_scan_id)
+            # save scan completion in db
+            print("finishing up...")
+            self.complete_scan(scan_id=current_scan_id)
