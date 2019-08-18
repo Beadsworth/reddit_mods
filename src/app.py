@@ -1,19 +1,39 @@
+import click
 import reddit_mod_data as bot
 import datetime as dt
 
-if __name__ == '__main__':
 
-    mode = 'dev'
+@click.command()
+# dev or prod
+@click.option('-d', '--development', 'mode', flag_value='dev', default=True,
+              help='run in dev mode')
+@click.option('-p', '--production', 'mode', flag_value='prod',
+              help='run in production mode')
+# remote or local
+@click.option('-r/-l', '--remote/--local', 'remote', is_flag=True, default=False,
+              help='access a database on a remote machine using ssh')
+# number of top subreddits to retrieve
+@click.option('-n', '--number', 'number', type=int, default=1,
+              help='number of top subreddits to retrieve')
+def run_app(mode, remote, number):
 
     start_time = dt.datetime.now()
-    print("starting script @{} ...".format(start_time))
+    click.echo("starting script @{} ...".format(start_time))
+    click.echo("mode: {}".format(mode))
+    click.echo("remote: {}".format(remote))
+    click.echo("number: {}".format(number))
 
     # execute task
-    bot.RedditModData(mode='dev', remote=False).perform_one_scan(sub_count=1000)
+    bot.RedditModData(mode=mode, remote=remote).perform_one_scan(sub_count=number)
 
     end_time = dt.datetime.now()
-    print("finishing script @{} ...".format(start_time))
+    click.echo("finishing script @{} ...".format(start_time))
 
     duration = end_time - start_time
-    print("total execution time was {}".format(duration))
-    print("done!")
+    click.echo("total execution time was {}".format(duration))
+    click.echo("done!")
+
+
+if __name__ == '__main__':
+    run_app()
+

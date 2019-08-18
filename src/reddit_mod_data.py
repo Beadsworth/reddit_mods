@@ -67,9 +67,11 @@ def get_user_agent_headers():
 
 class RedditModData:
 
+    valid_modes = 'dev', 'prod'
     url_pattern = re.compile('/?(.+?)/(.+?)/?$')
 
     def __init__(self, mode, remote):
+        assert mode in self.valid_modes, "invalid mode"
         self.reddit_client = praw.Reddit(user_agent=reddit_secret.user_agent,
                                          client_id=reddit_secret.client_id,
                                          client_secret=reddit_secret.client_secret)
@@ -237,6 +239,7 @@ class RedditModData:
         self.db_conn.push('scans', scan_df)
 
         scan_id = self.db_conn.get_last_scan_id()
+        print("checked out scan_id: {scan_id}".format(scan_id=scan_id))
         return scan_id
 
     def store_top_subs(self, scan_id, sub_count):

@@ -40,7 +40,7 @@ class DBConnection(mysql.MySQLClient):
         query_str = \
             """
             SELECT id
-            FROM reddit_mods_dev.scans
+            FROM scans
             ORDER BY id DESC
             LIMIT 1
             """
@@ -56,7 +56,7 @@ class DBConnection(mysql.MySQLClient):
             SELECT
                  id AS top_subreddits_id
                 ,subreddit_id
-            FROM reddit_mods_dev.top_subreddits
+            FROM top_subreddits
             WHERE scan_id = {scan_id}
             ORDER BY id
             """.format(scan_id=scan_id)
@@ -71,8 +71,8 @@ class DBConnection(mysql.MySQLClient):
                  t.scan_id
                 ,m.id AS mod_id
                 ,t.moderator_name
-            FROM reddit_mods_dev.top_mods AS t
-            JOIN reddit_mods_dev.active_moderators AS m
+            FROM top_mods AS t
+            JOIN active_moderators AS m
                 ON m.moderator_id = t.moderator_id
             WHERE t.scan_id = {scan_id}
             ORDER BY t.scan_id, t.moderator_name
