@@ -9,6 +9,7 @@ import re
 import time
 import db
 import tqdm
+import json
 
 
 try:
@@ -71,22 +72,58 @@ class RedditModData:
     url_pattern = re.compile('/?(.+?)/(.+?)/?$')
 
     def __init__(self, mode, remote):
-        assert mode in self.valid_modes, "invalid mode"
+        assert mode in self.valid_modes, "invalid mode given: {mode}".format(mode=mode)
         self.reddit_client = praw.Reddit(user_agent=reddit_secret.user_agent,
                                          client_id=reddit_secret.client_id,
                                          client_secret=reddit_secret.client_secret)
 
         self.db_conn = db.DBConnection.get_db_conn(mode=mode, remote=remote)
 
-    def get_sub_id_from_name(self, subreddit_name):
+    def get_sub_json_from_name_from_web(self, scan_id, subreddit_name):
+
+        time.sleep(2)
+
+        # subreddit info page
+        subreddit_page = 'http://ps.reddit.com/r/{}/about.json'.format(subreddit_name)
+        # bypass nsfw age confirmation and quarantines
+        cookies = {'over18': '1', '_options': '{%22pref_quarantine_optin%22:true}'}
+        response = requests.get(subreddit_page, headers=get_user_agent_headers(), cookies=cookies)
+
+        sub_json = None
+
+        if response.status_code == 200:
+
+            # parse json
+            sub_json = json.loads(response.content)
+
+        # cannot find subreddit
+        else:
+            print('error code {error}: cannot access subreddit {subreddit_name}'
+                  .format(error=response.status_code, subreddit_name=subreddit_name))
+            # log error in db
+            subreddit_errors = pd.DataFrame([{'scan_id': scan_id, 'subreddit_display_name': subreddit_name,
+                                              'error_code': response.status_code, 'log_date': dt.datetime.now()}])
+            self.db_conn.push('moderator_errors',
+                              subreddit_errors[['scan_id', 'subreddit_display_name', 'error_code', 'log_date']])
+
+
+        return sub_json
+
+    def get_sub_id_from_name(self, scan_id, subreddit_name):
+
+        sub_id = None
 
         try:
             sub_id = 't5_' + str(self.reddit_client.subreddit(subreddit_name).id)
 
-        # TODO find id if forbidden
+        # TODO clean up
         except (prawcore.exceptions.Forbidden, prawcore.exceptions.NotFound, prawcore.exceptions.Redirect) as e:
-            print('could not find id for /r/'+subreddit_name)
-            sub_id = None
+
+            try:
+                sub_json = self.get_sub_json_from_name_from_web(scan_id=scan_id, subreddit_name=subreddit_name)
+                sub_id = sub_json['data']['name']
+            except KeyError as e:
+                print('could not find id for /r/'+subreddit_name)
 
         return sub_id
 
@@ -145,8 +182,8 @@ class RedditModData:
 
         # request user page
         user_page = 'http://ps.reddit.com/user/' + moderator_name
-        # bypass nsfw age confirmation
-        cookies = {'over18': '1'}
+        # bypass nsfw age confirmation and quarantines
+        cookies = {'over18': '1', '_options': '{%22pref_quarantine_optin%22:true}'}
         response = requests.get(user_page, headers=get_user_agent_headers(), cookies=cookies)
         modded_subreddits = []
 
@@ -300,7 +337,7 @@ class RedditModData:
 
         subreddit_names = self.db_conn.get_missing_sub_ids_from_scan(scan_id=scan_id)
         subreddit_names['subreddit_id'] = subreddit_names['subreddit_display_name']\
-            .apply(lambda x: self.get_sub_id_from_name(x))
+            .apply(lambda x: self.get_sub_id_from_name(scan_id=scan_id, subreddit_name=x))
         subreddit_names['log_date'] = dt.datetime.now()
 
         # public subreddits with ids that are found
