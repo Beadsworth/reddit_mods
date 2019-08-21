@@ -103,7 +103,7 @@ class RedditModData:
             # log error in db
             subreddit_errors = pd.DataFrame([{'scan_id': scan_id, 'subreddit_display_name': subreddit_name,
                                               'error_code': response.status_code, 'log_date': dt.datetime.now()}])
-            self.db_conn.push('moderator_errors',
+            self.db_conn.push('subreddit_errors',
                               subreddit_errors[['scan_id', 'subreddit_display_name', 'error_code', 'log_date']])
 
 
