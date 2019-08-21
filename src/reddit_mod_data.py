@@ -98,8 +98,8 @@ class RedditModData:
 
         # cannot find subreddit
         else:
-            print('error code {error}: cannot access subreddit {subreddit_name}'
-                  .format(error=response.status_code, subreddit_name=subreddit_name))
+            # print('error code {error}: cannot access subreddit {subreddit_name}'
+            #       .format(error=response.status_code, subreddit_name=subreddit_name))
             # log error in db
             subreddit_errors = pd.DataFrame([{'scan_id': scan_id, 'subreddit_display_name': subreddit_name,
                                               'error_code': response.status_code, 'log_date': dt.datetime.now()}])
@@ -121,7 +121,8 @@ class RedditModData:
             try:
                 sub_json = self.get_sub_json_from_name_from_web(scan_id=scan_id, subreddit_name=subreddit_name)
                 sub_id = sub_json['data']['name']
-            except KeyError as e:
+
+            except (KeyError, TypeError) as e:
                 print('could not find id for /r/'+subreddit_name)
 
         return sub_id
