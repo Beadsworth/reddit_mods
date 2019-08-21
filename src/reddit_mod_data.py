@@ -106,7 +106,6 @@ class RedditModData:
             self.db_conn.push('subreddit_errors',
                               subreddit_errors[['scan_id', 'subreddit_display_name', 'error_code', 'log_date']])
 
-
         return sub_json
 
     def get_sub_id_from_name(self, scan_id, subreddit_name):
