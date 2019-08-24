@@ -18,6 +18,7 @@ except ImportError:
     from bs4 import BeautifulSoup
 
 
+# TODO: handle rate limiting in separate class
 def get_user_agent_headers():
     user_agent_list = [
        #Chrome
