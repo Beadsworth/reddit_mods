@@ -1,6 +1,10 @@
 import click
 import reddit_mod_data as bot
 import datetime as dt
+from pbr.version import VersionInfo
+
+info = VersionInfo(bot.__name__)
+current_version = info.version_string()
 
 
 @click.command()
@@ -35,5 +39,7 @@ def run_app(mode, remote, number):
 
 
 if __name__ == '__main__':
+    print("running version {version}".format(version=current_version))
     run_app()
+
 

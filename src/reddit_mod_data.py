@@ -55,6 +55,7 @@ def get_user_agent_headers():
     return headers
 
 
+# TODO: log app version in db
 class RedditModData:
 
     valid_modes = 'dev', 'prod'
