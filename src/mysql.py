@@ -48,6 +48,7 @@ class MySQLClient:
                                      database=self.mysql_database)
 
         self.engine = sqlalchemy.create_engine(conn_str)
+        print("connected to {}!".format(self.get_current_db()))
 
     def close_db(self):
         self.engine.dispose()
@@ -75,6 +76,12 @@ class MySQLClient:
 
         with self.engine.connect() as con:
             con.execute(query_str)
+
+    def get_current_db(self):
+
+        df = self.pull('SELECT DATABASE() AS db;')
+        current_db = df['db'][0]
+        return current_db
 
     @classmethod
     def from_ssh_tunnel(cls, remote_ip, ssh_port, ssh_username, ssh_password,
@@ -111,7 +118,7 @@ if __name__ == '__main__':
 
     with db_connection as sql:
 
-        test_result = sql.pull('SELECT * FROM subreddits ORDER BY log_date DESC LIMIT 10')
+        test_result = sql.pull('SELECT 1')
         print(test_result)
 
     print("done!")
