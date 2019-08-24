@@ -18,17 +18,6 @@ except ImportError:
     from bs4 import BeautifulSoup
 
 
-def loiter(pause_time):
-
-    for j in range(pause_time):
-
-        remaining_time = pause_time - j
-
-        print("next iteration in {seconds} seconds".format(seconds=remaining_time), end='')
-        time.sleep(1)
-        print("\r" + " " * 100, end='\r')
-
-
 def get_user_agent_headers():
     user_agent_list = [
        #Chrome
